@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+telemetry.db
+node_modules/
+dist/
+.DS_Store
