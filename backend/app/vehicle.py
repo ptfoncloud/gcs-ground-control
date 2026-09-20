@@ -5,9 +5,6 @@ from pymavlink import mavutil
 from app.config import settings
 from app.schemas import TelemetryFrame
 
-  # update as of 11:14PM 9/16/26 i unfortunately forgot to write this 
-  # and then wondered why it wasnt working, problem is solved ;)
-
 class VehicleManager:
     def __init__(self):
         self.master = None
@@ -19,7 +16,6 @@ class VehicleManager:
         self.running = False
 
     async def connect(self):
-        # Target local loopback UDP port 14550
         conn_str = getattr(settings, "MAVLINK_CONNECTION_STRING", "udpin:127.0.0.1:14550")
         self.master = mavutil.mavlink_connection(conn_str)
         self.running = True
@@ -27,7 +23,6 @@ class VehicleManager:
 
         while self.running:
             try:
-                
                 msg = self.master.recv_match(blocking=False)
                 if msg:
                     msg_type = msg.get_type()
@@ -44,14 +39,11 @@ class VehicleManager:
                         self.latest_telemetry.yaw = round(msg.yaw, 3)
 
                     elif msg_type == "GLOBAL_POSITION_INT":
-                        
                         self.latest_telemetry.altitude = round(msg.relative_alt / 1000.0, 2)
-                        
                         speed_ms = math.sqrt(msg.vx**2 + msg.vy**2) / 100.0
                         self.latest_telemetry.ground_speed = round(speed_ms, 2)
 
                     elif msg_type == "SYS_STATUS":
-                        
                         self.latest_telemetry.battery_voltage = round(msg.voltage_battery / 1000.0, 2)
 
                     self.latest_telemetry.timestamp = round(time.time(), 2)
@@ -59,18 +51,19 @@ class VehicleManager:
             except Exception as e:
                 print(f"[VEHICLE INGEST ERROR] {e}")
 
-            # Yield control so FastAPI can actually service the WebSocket loop
             await asyncio.sleep(0.005)
 
-    async def send_command(self, command: str, *args) -> bool:
+    async def send_command(self, command: str, **kwargs) -> bool:
         if not self.master:
-            print("[COMMAND ERROR] No active MAVLink link - connection lost")
+            print("[COMMAND ERROR] No master MAVLink connection initialized.")
             return False
 
-        # Target sys 1, component 1 by default if not yet negotiated
+        if not getattr(self.master, "destination_addr", None):
+            print("[COMMAND ERROR] No remote target address discovered yet.")
+            return False
+
         target_sys = self.master.target_system or 1
         target_comp = self.master.target_component or 1
-
         command = command.upper()
 
         try:
@@ -80,28 +73,34 @@ class VehicleManager:
                     target_sys,
                     target_comp,
                     mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
-                    0,    #confirmation
-                    arm_val,    #param1: 1 to ARM, 0 to DISARM
+                    0,          # Confirmation
+                    arm_val,    # 1.0 to ARM, 0.0 to DISARM
                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0
                 )
-                print(f"[COMMAND UPLINK] Dispatched {command} to sys {target_sys}")
+                print(f"[COMMAND UPLINK] Dispatched {command} -> System {target_sys}")
                 return True
 
             elif command == "SET_MODE":
                 mode = kwargs.get("mode", "GUIDED").upper()
-                # use pymavlinks built in mode maps
-                mode_id = self.master.mode_mapping().get(mode)
+                mode_id = 4 if mode == "GUIDED" else self.master.mode_mapping().get(mode)
                 if mode_id is None:
-                    # fallback mapping for ArduCopter guided mode
-                    if mode == "GUIDED":
-                        mode_id = 4
-                    else:
-                        print(f"[COMMAND ERROR] Unknown flight mode: {mode}")
-                        return False
+                    print(f"[COMMAND ERROR] Unknown flight mode: {mode}")
+                    return False
 
                 self.master.mav.set_mode_send(
                     target_sys,
-                    
-                )        
+                    mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+                    mode_id
+                )
+                print(f"[COMMAND UPLINK] Mode set -> {mode} (ID {mode_id})")
+                return True
+
+            else:
+                print(f"[COMMAND ERROR] Unsupported command: {command}")
+                return False
+
+        except Exception as e:
+            print(f"[COMMAND EXEC EXCEPTION] Failed to dispatch {command}: {e}")
+            return False
 
 vehicle_manager = VehicleManager()

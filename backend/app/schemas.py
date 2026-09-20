@@ -24,3 +24,10 @@ class HandFrame(BaseModel):
     grab_strength: float
     pinch_strength: float
     extended_fingers: int
+
+from typing import Optional
+from pydantic import BaseModel
+
+class CommandRequest(BaseModel):
+    command: str
+    mode: Optional[str] = None

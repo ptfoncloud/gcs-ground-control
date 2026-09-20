@@ -1,31 +1,36 @@
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from app.database import init_db
-from app.routers import vehicle, telemetry, ws
+
 from app.vehicle import vehicle_manager
+from app.routers import commands, telemetry, ws
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
-    asyncio.create_task(vehicle_manager.connect())
+    # Launch MAVLink background ingest loop
+    task = asyncio.create_task(vehicle_manager.connect())
     yield
+    # Graceful shutdown
+    vehicle_manager.running = False
+    task.cancel()
 
-app = FastAPI(title="GCS Flight Core", lifespan=lifespan)
+app = FastAPI(title="GCS Mission Backend", lifespan=lifespan)
 
+# Allow Vue dev server to communicate
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(vehicle.router)
+# Mount Routers
+app.include_router(commands.router)
 app.include_router(telemetry.router)
 app.include_router(ws.router)
 
-@app.get("/health")
-async def health():
-    return {"status": "healthy"}
+@app.get("/")
+def root():
+    return {"status": "ONLINE", "system": "GCS Mission Core"}
