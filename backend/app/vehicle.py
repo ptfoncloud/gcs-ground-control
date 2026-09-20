@@ -27,7 +27,7 @@ class VehicleManager:
 
         while self.running:
             try:
-                # Non-blocking poll of the UDP socket buffer
+                
                 msg = self.master.recv_match(blocking=False)
                 if msg:
                     msg_type = msg.get_type()
@@ -44,14 +44,14 @@ class VehicleManager:
                         self.latest_telemetry.yaw = round(msg.yaw, 3)
 
                     elif msg_type == "GLOBAL_POSITION_INT":
-                        # Convert mm to meters
+                        
                         self.latest_telemetry.altitude = round(msg.relative_alt / 1000.0, 2)
-                        # Groundspeed magnitude from vx/vy (cm/s -> m/s)
+                        
                         speed_ms = math.sqrt(msg.vx**2 + msg.vy**2) / 100.0
                         self.latest_telemetry.ground_speed = round(speed_ms, 2)
 
                     elif msg_type == "SYS_STATUS":
-                        # Convert mV to Volts
+                        
                         self.latest_telemetry.battery_voltage = round(msg.voltage_battery / 1000.0, 2)
 
                     self.latest_telemetry.timestamp = round(time.time(), 2)
@@ -62,7 +62,46 @@ class VehicleManager:
             # Yield control so FastAPI can actually service the WebSocket loop
             await asyncio.sleep(0.005)
 
-    async def send_command(self, command: str, *args):
-        pass
+    async def send_command(self, command: str, *args) -> bool:
+        if not self.master:
+            print("[COMMAND ERROR] No active MAVLink link - connection lost")
+            return False
+
+        # Target sys 1, component 1 by default if not yet negotiated
+        target_sys = self.master.target_system or 1
+        target_comp = self.master.target_component or 1
+
+        command = command.upper()
+
+        try:
+            if command in ["ARM", "DISARM"]:
+                arm_val = 1.0 if command == "ARM" else 0.0
+                self.master.mav.command_long_send(
+                    target_sys,
+                    target_comp,
+                    mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+                    0,    #confirmation
+                    arm_val,    #param1: 1 to ARM, 0 to DISARM
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+                )
+                print(f"[COMMAND UPLINK] Dispatched {command} to sys {target_sys}")
+                return True
+
+            elif command == "SET_MODE":
+                mode = kwargs.get("mode", "GUIDED").upper()
+                # use pymavlinks built in mode maps
+                mode_id = self.master.mode_mapping().get(mode)
+                if mode_id is None:
+                    # fallback mapping for ArduCopter guided mode
+                    if mode == "GUIDED":
+                        mode_id = 4
+                    else:
+                        print(f"[COMMAND ERROR] Unknown flight mode: {mode}")
+                        return False
+
+                self.master.mav.set_mode_send(
+                    target_sys,
+                    
+                )        
 
 vehicle_manager = VehicleManager()
