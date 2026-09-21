@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="console-layout">
     <header>
       <div>
@@ -11,7 +11,8 @@
     </header>
 
     <main>
-      <!-- Telemetry Gauges Grid -->
+      <ControlPanel />
+
       <div class="gauge-grid">
         <TelemetryCard label="Altitude AGL" :value="store.telemetry.altitude.toFixed(1)" unit="m" />
         <TelemetryCard label="Ground Speed" :value="store.telemetry.ground_speed.toFixed(1)" unit="m/s" />
@@ -21,7 +22,6 @@
         <TelemetryCard label="Heading" :value="formatHeading(store.telemetry.yaw)" unit="deg" />
       </div>
 
-      <!-- Collapsible Raw Feed -->
       <details>
         <summary>Raw Ingest Stream</summary>
         <pre>{{ store.telemetry }}</pre>
@@ -34,11 +34,11 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useVehicleStore } from './stores/vehicleStore'
 import TelemetryCard from './components/TelemetryCard.vue'
+import ControlPanel from './components/ControlPanel.vue'
 
 const store = useVehicleStore()
 let ws = null
 
-// Conversion helpers
 const toDegrees = (rad) => ((rad * 180) / Math.PI).toFixed(1)
 const formatHeading = (yawRad) => {
   let deg = (yawRad * 180) / Math.PI
