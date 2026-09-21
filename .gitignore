@@ -1,7 +1,15 @@
+# Virtual environments & Python
+.venv/
+venv/
 __pycache__/
 *.pyc
-.venv/
-telemetry.db
+
+# Node & dependencies
 node_modules/
 dist/
+.vite/
+
+# System & IDE
 .DS_Store
+.vscode/
+.idea/
