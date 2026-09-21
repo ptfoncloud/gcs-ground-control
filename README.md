@@ -1,4 +1,4 @@
-```markdown
+
 # Autonomous Flight Core: Ground Control Station & HIL Testbed
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
@@ -192,10 +192,6 @@ The ingestion engine binds to standard UDP port `14550` using MAVLink 2.0 framin
 
 TCP enforces strict in-order delivery through retransmission. Over degraded or high-latency RF links, this introduces **Head-of-Line (HoL) blocking**, where fresh attitude updates are paused while waiting for retransmissions of stale packets. Telemetry is ephemeral; an attitude packet that is 200 ms late is useless to ground operators. The GCS prioritizes the newest frame over complete recovery, making non-blocking UDP the correct transport.
 
-### Modulo-256 Sequence Rollover
-
-MAVLink uses an 8-bit wire sequence counter (0 to 255). The formula $(\text{seq}_{\text{curr}} - \text{seq}_{\text{last}} - 1) \pmod{256}$ ensures that transitioning from 255 to 0 evaluates to $(-256) \pmod{256} = 0$ dropped packets, maintaining mathematical accuracy across integer boundaries without brittle conditional branches.
-
 ### Prevention of Optimistic UI State
 
 Optimistic updates in aerospace ground software can create dangerous discrepancies between displayed and actual vehicle states. If a ground station marks an engine as "ARMED" before receiving verification, operators may act on false assumptions during an abort. Ground software must remain strictly authoritative, reflecting armed status only after receiving downlinked confirmation through the `MAV_MODE_FLAG_SAFETY_ARMED` (`0x80`) bitmask.
@@ -206,44 +202,12 @@ Wrapping third-party DOM-manipulating libraries like Leaflet inside Vue 3's reac
 
 ---
 
-## 8. Candidate Portfolio Package
-
-### Internal Referral Email Template (Ryan Williams to Recruiter)
-
-> **Subject:** Referral: [Your Name] – Ground Software / Avionics Test Engineering Intern (Summer 2027)
-> Hi [Recruiter Name],
-> I wanted to introduce you to [Your Name] for our Ground Software and Avionics Test engineering internship positions.
-> They work with Dr. Justin Oelgoetz (APSU Principal Investigator for NASA Space Grant) on high-altitude instrumentation payloads and recently built an asynchronous Ground Control Station and HIL telemetry testbed from scratch using Python and Vue 3. The system handles raw UDP MAVLink 2.0 binary streams, 8-bit modulo sequence loss tracking, authoritative state interlocks, and MIL-STD-1787C cockpit displays.
-> I have linked their repository and a short demonstration clip below:
-> * **Repository:** [GitHub Link]
-> * **Demo Video:** [30-Second Clip Link]
-> 
-> 
-> They would be an excellent fit for the ground software and avionics test teams. Let me know if you would like to arrange an introductory call.
-> Best,
-> Ryan Williams
-
-### Resume Project Bullet Points
-
-```text
-AUTONOMOUS GROUND CONTROL STATION & HIL AVIONICS TESTBED
-Personal Project | Python, FastAPI, Vue 3, MAVLink, WebSockets, Pytest
-• Engineered an asynchronous MAVLink 2.0 ground telemetry ingestion core in FastAPI/pymavlink, processing binary flight data over UDP port 14550 with sub-25ms WebSocket fanout.
-• Implemented an 8-bit unsigned modular arithmetic engine ((seq_curr - seq_last - 1) % 256) to track frame loss, burst drops, and uint8 rollovers with duplicate frame rejection.
-• Enforced authoritative flight software interlocks preventing optimistic ground state mutations, requiring base_mode bitmask verification (0x80) prior to arming acknowledgment.
-• Developed an SVG Primary Flight Display complying with MIL-STD-1787C standards, paired with a Leaflet.js tactical map running CartoDB monochrome tiles and real-time heading vectors.
-• Authored a 12-test automated regression suite using pytest and pytest-asyncio covering packet boundaries, socket exceptions, and command pipelines.
-
-```
-
----
-
 ## 9. License
 
 ```text
 MIT License
 
-Copyright (c) 2026 [Your Name]
+Copyright (c) 2026 Preston Thurman Foote
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
