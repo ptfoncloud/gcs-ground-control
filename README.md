@@ -9,7 +9,7 @@
 
 
 <p align="center">
-  <img src="assets/demo.gif" alt="Mission Console Live Flight Demo" width="750">
+  <img src="assets/GCSMissionConsole-Opera2026-09-2117-42-15-ezgif.com-video-to-gif-converter.gif" alt="Mission Console Live Flight Demo" width="750">
 </p>
 
 
