@@ -76,6 +76,9 @@ class VehicleManager:
                         self.latest_telemetry.altitude = round(msg.relative_alt / 1000.0, 2)
                         speed_ms = math.sqrt(msg.vx**2 + msg.vy**2) / 100.0
                         self.latest_telemetry.ground_speed = round(speed_ms, 2)
+                        # MAVLink stores lat/lon as integers multiplied by 1e7
+                        self.latest_telemetry.lat = round(msg.lat / 1e7, 7)
+                        self.latest_telemetry.lon = round(msg.lon / 1e7, 7)
 
                     elif msg_type == "SYS_STATUS":
                         self.latest_telemetry.battery_voltage = round(msg.voltage_battery / 1000.0, 2)

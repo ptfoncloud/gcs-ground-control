@@ -15,6 +15,8 @@ class TelemetryFrame(BaseModel):
     yaw: float
     packets_rx: int = 0
     packet_loss_pct: float = 0.0
+    lat: float = 0.0
+    lon: float = 0.0
 
 class VehicleCommand(BaseModel):
     command: str  # ARM, DISARM, TAKEOFF, RTL, START_MISSION
