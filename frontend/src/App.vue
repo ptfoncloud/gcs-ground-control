@@ -18,6 +18,13 @@
       </div>
 
       <div class="header-right">
+        <button 
+          class="audio-toggle-btn" 
+          :class="{ muted: isAudioMuted }"
+          @click="handleAudioToggle"
+        >
+          AUDIO: {{ isAudioMuted ? 'MUTED' : 'ARMED' }}
+        </button>
         <div class="watchdog-cluster">
           <span class="watchdog-rate">{{ packetRateHz.toFixed(1) }} HZ</span>
           <span class="watchdog-sub">TARGET 20 HZ</span>
@@ -84,8 +91,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useVehicleStore } from './stores/vehicleStore'
+// 1. IMPORT THE SIMPLIFIED AUDIO FUNCTIONS HERE
+import { startAlarm, stopAlarm, toggleMute } from './utils/audioCaution'
 import TelemetryCard from './components/TelemetryCard.vue'
 import ControlPanel from './components/ControlPanel.vue'
 import ArtificialHorizon from './components/ArtificialHorizon.vue'
@@ -93,13 +102,30 @@ import ArtificialHorizon from './components/ArtificialHorizon.vue'
 const store = useVehicleStore()
 let ws = null
 
+// Clock
 const utcTimeStr = ref('00:00:00 UTC')
 let clockInterval = null
 
+// Watchdog stats
 const packetRateHz = ref(0.0)
 const isLinkFresh = ref(false)
 let packetTimes = []
 let watchdogInterval = null
+
+// 2. AUDIO TOGGLE STATE & HANDLER
+const isAudioMuted = ref(false)
+const handleAudioToggle = () => {
+  isAudioMuted.value = toggleMute()
+}
+
+// 3. SOUND ALARM WHEN LINK DIES OR PACKETS STALL
+watch([() => store.connected, isLinkFresh], ([connected, fresh]) => {
+  if (!connected || !fresh) {
+    startAlarm()
+  } else {
+    stopAlarm()
+  }
+})
 
 const formatHeading = (yawRad) => {
   let deg = (yawRad * 180) / Math.PI
@@ -149,6 +175,8 @@ onUnmounted(() => {
   if (ws) ws.close()
   if (clockInterval) clearInterval(clockInterval)
   if (watchdogInterval) clearInterval(watchdogInterval)
+  // 4. STOP AUDIO ON PAGE UNLOAD
+  stopAlarm()
 })
 </script>
 
@@ -332,5 +360,22 @@ onUnmounted(() => {
   font-family: "Consolas", "SF Mono", monospace;
   font-size: 0.85rem;
   overflow-x: auto;
+}
+.audio-toggle-btn {
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  color: #e4e4e7;
+  font-family: "Consolas", "SF Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.audio-toggle-btn.muted {
+  border-color: #71717a;
+  color: #71717a;
+  background: #09090b;
 }
 </style>

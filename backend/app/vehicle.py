@@ -9,10 +9,23 @@ class VehicleManager:
     def __init__(self):
         self.master = None
         self.latest_telemetry = TelemetryFrame(
-            timestamp=0.0, armed=False, flight_mode="UNKNOWN",
-            altitude=0.0, ground_speed=0.0, battery_voltage=0.0,
-            pitch=0.0, roll=0.0, yaw=0.0
+            timestamp=0.0,
+            armed=False,
+            flight_mode="UNKNOWN",
+            altitude=0.0,
+            ground_speed=0.0,
+            battery_voltage=0.0,
+            pitch=0.0,
+            roll=0.0,
+            yaw=0.0,
+            packets_rx=0,
+            packet_loss_pct=0.0
         )
+        # Link health & sequence loss tracking
+        self.last_seq = None
+        self.total_packets_received = 0
+        self.total_packets_dropped = 0
+        self.packet_loss_pct = 0.0
         self.running = False
 
     async def connect(self):
@@ -23,8 +36,29 @@ class VehicleManager:
 
         while self.running:
             try:
+                # Non-blocking socket read
                 msg = self.master.recv_match(blocking=False)
                 if msg:
+                    # 1. Packet Sequence & Loss Tracking (8-bit modulo 256)
+                    current_seq = msg.get_seq()
+                    if self.last_seq is not None:
+                        # Accounts for 255 -> 0 overflow
+                        dropped = (current_seq - self.last_seq - 1) % 256
+                        if dropped > 0:
+                            self.total_packets_dropped += dropped
+
+                    self.last_seq = current_seq
+                    self.total_packets_received += 1
+
+                    total_expected = self.total_packets_received + self.total_packets_dropped
+                    if total_expected > 0:
+                        self.packet_loss_pct = round((self.total_packets_dropped / total_expected) * 100.0, 2)
+
+                    # Update link stats on telemetry frame
+                    self.latest_telemetry.packets_rx = self.total_packets_received
+                    self.latest_telemetry.packet_loss_pct = self.packet_loss_pct
+
+                    
                     msg_type = msg.get_type()
 
                     if msg_type == "HEARTBEAT":
@@ -51,6 +85,7 @@ class VehicleManager:
             except Exception as e:
                 print(f"[VEHICLE INGEST ERROR] {e}")
 
+            # Non-blocking yield to event loop
             await asyncio.sleep(0.005)
 
     async def send_command(self, command: str, **kwargs) -> bool:

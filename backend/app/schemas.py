@@ -1,11 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-
-class VehicleCommand(BaseModel):
-    command: str  # ARM, DISARM, TAKEOFF, RTL, START_MISSION
-    param1: Optional[float] = 0.0
-    param2: Optional[float] = 0.0
+from pydantic import BaseModel
 
 class TelemetryFrame(BaseModel):
     timestamp: float
@@ -17,6 +13,13 @@ class TelemetryFrame(BaseModel):
     pitch: float
     roll: float
     yaw: float
+    packets_rx: int = 0
+    packet_loss_pct: float = 0.0
+
+class VehicleCommand(BaseModel):
+    command: str  # ARM, DISARM, TAKEOFF, RTL, START_MISSION
+    param1: Optional[float] = 0.0
+    param2: Optional[float] = 0.0
 
 class HandFrame(BaseModel):
     palm_position: List[float]  # [x, y, z]
