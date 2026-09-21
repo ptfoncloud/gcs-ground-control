@@ -1,45 +1,106 @@
 ﻿<template>
-  <div class="console-layout">
-    <header>
-      <div>
-        <h1>MISSION OPERATIONS CONSOLE</h1>
-        <p class="subtitle">AUTONOMOUS FLIGHT CORE v1.0.0</p>
+  <div class="mission-screen">
+    <header class="mission-header">
+      <div class="header-left">
+        <div class="brand-title">MISSION OPERATIONS CONSOLE</div>
+        <div class="meta-row">
+          <span class="meta-item">PROGRAM: AUTONOMOUS FLIGHT CORE</span>
+          <span class="meta-sep">//</span>
+          <span class="meta-item">SYS 01</span>
+          <span class="meta-sep">//</span>
+          <span class="meta-item">PORT 14550</span>
+        </div>
       </div>
-      <div class="status-pill" :class="{ online: store.connected }">
-        {{ store.connected ? 'LINK ACTIVE' : 'DISCONNECTED' }}
+
+      <div class="header-center">
+        <div class="clock-label">MISSION ELAPSED TIME (UTC)</div>
+        <div class="clock-display">{{ utcTimeStr }}</div>
+      </div>
+
+      <div class="header-right">
+        <div class="watchdog-cluster">
+          <span class="watchdog-rate">{{ packetRateHz.toFixed(1) }} HZ</span>
+          <span class="watchdog-sub">TARGET 20 HZ</span>
+        </div>
+
+        <div class="link-badge" :class="{ 'link-nominal': store.connected && isLinkFresh, 'link-stale': !isLinkFresh }">
+          <span class="link-pip"></span>
+          {{ !store.connected ? 'LINK LOSS' : isLinkFresh ? 'CARRIER LOCK' : 'DATA STALE' }}
+        </div>
       </div>
     </header>
 
-    <main>
+    <main class="console-body">
       <ControlPanel />
 
-      <div class="gauge-grid">
-        <TelemetryCard label="Altitude AGL" :value="store.telemetry.altitude.toFixed(1)" unit="m" />
-        <TelemetryCard label="Ground Speed" :value="store.telemetry.ground_speed.toFixed(1)" unit="m/s" />
-        <TelemetryCard label="Battery Rail" :value="store.telemetry.battery_voltage.toFixed(2)" unit="V" />
-        <TelemetryCard label="Pitch" :value="toDegrees(store.telemetry.pitch)" unit="deg" />
-        <TelemetryCard label="Roll" :value="toDegrees(store.telemetry.roll)" unit="deg" />
-        <TelemetryCard label="Heading" :value="formatHeading(store.telemetry.yaw)" unit="deg" />
+      <div class="avionics-matrix">
+        <ArtificialHorizon 
+          :pitch-rad="store.telemetry.pitch" 
+          :roll-rad="store.telemetry.roll" 
+        />
+
+        <div class="gauges-cluster">
+          <TelemetryCard 
+            channel="NAV-01"
+            label="Altitude AGL" 
+            :value="store.telemetry.altitude.toFixed(1)" 
+            unit="M" 
+            sublabel="RADAR ALTIMETER"
+          />
+          <TelemetryCard 
+            channel="NAV-02"
+            label="Ground Speed" 
+            :value="store.telemetry.ground_speed.toFixed(1)" 
+            unit="M/S" 
+            sublabel="DOPPLER KINEMATICS"
+          />
+          <TelemetryCard 
+            channel="PWR-01"
+            label="Battery Rail" 
+            :value="store.telemetry.battery_voltage.toFixed(2)" 
+            unit="V" 
+            sublabel="MAIN BUS 4S"
+            :is-alert="store.telemetry.battery_voltage < 11.1"
+          />
+          <TelemetryCard 
+            channel="DIR-01"
+            label="Heading" 
+            :value="formatHeading(store.telemetry.yaw)" 
+            unit="DEG" 
+            sublabel="MAGNETIC NORTH"
+          />
+        </div>
       </div>
 
-      <details>
-        <summary>Raw Ingest Stream</summary>
-        <pre>{{ store.telemetry }}</pre>
+      <details class="telemetry-drawer">
+        <summary class="drawer-toggle">
+          <span>DOWNLINK BITSTREAM INSPECTOR (JSON)</span>
+          <span class="toggle-hint">[EXPAND RAW FEED]</span>
+        </summary>
+        <pre class="stream-dump">{{ store.telemetry }}</pre>
       </details>
     </main>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useVehicleStore } from './stores/vehicleStore'
 import TelemetryCard from './components/TelemetryCard.vue'
 import ControlPanel from './components/ControlPanel.vue'
+import ArtificialHorizon from './components/ArtificialHorizon.vue'
 
 const store = useVehicleStore()
 let ws = null
 
-const toDegrees = (rad) => ((rad * 180) / Math.PI).toFixed(1)
+const utcTimeStr = ref('00:00:00 UTC')
+let clockInterval = null
+
+const packetRateHz = ref(0.0)
+const isLinkFresh = ref(false)
+let packetTimes = []
+let watchdogInterval = null
+
 const formatHeading = (yawRad) => {
   let deg = (yawRad * 180) / Math.PI
   if (deg < 0) deg += 360
@@ -47,6 +108,21 @@ const formatHeading = (yawRad) => {
 }
 
 onMounted(() => {
+  clockInterval = setInterval(() => {
+    const now = new Date()
+    utcTimeStr.value = now.toUTCString().split(' ')[4] + ' UTC'
+  }, 1000)
+
+  watchdogInterval = setInterval(() => {
+    const now = performance.now()
+    packetTimes = packetTimes.filter(t => now - t <= 1000)
+    packetRateHz.value = packetTimes.length
+
+    if (packetTimes.length === 0) {
+      isLinkFresh.value = false
+    }
+  }, 500)
+
   ws = new WebSocket('ws://localhost:8080/ws/telemetry')
 
   ws.onopen = () => {
@@ -55,6 +131,8 @@ onMounted(() => {
 
   ws.onmessage = (event) => {
     try {
+      packetTimes.push(performance.now())
+      isLinkFresh.value = true
       store.updateTelemetry(JSON.parse(event.data))
     } catch (err) {
       console.error('Failed to parse telemetry packet:', err)
@@ -63,90 +141,196 @@ onMounted(() => {
 
   ws.onclose = () => {
     store.connected = false
+    isLinkFresh.value = false
   }
 })
 
 onUnmounted(() => {
   if (ws) ws.close()
+  if (clockInterval) clearInterval(clockInterval)
+  if (watchdogInterval) clearInterval(watchdogInterval)
 })
 </script>
 
 <style scoped>
-.console-layout {
-  padding: 24px;
-  font-family: monospace;
-  background-color: #020617;
-  color: #f8fafc;
+.mission-screen {
+  padding: 24px 32px;
+  background-color: #000000;
+  color: #ffffff;
   min-height: 100vh;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-header {
+.mission-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #334155;
-  padding-bottom: 14px;
+  border-bottom: 2px solid #27272a;
+  padding-bottom: 16px;
   margin-bottom: 24px;
 }
 
-h1 {
-  font-size: 1.15rem;
-  letter-spacing: 0.05em;
-  color: #38bdf8;
-  margin: 0;
+.brand-title {
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: #ffffff;
 }
 
-.subtitle {
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.meta-item {
+  font-family: "Consolas", "SF Mono", monospace;
   font-size: 0.7rem;
-  color: #64748b;
-  margin: 2px 0 0 0;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #71717a;
 }
 
-.status-pill {
-  padding: 4px 10px;
-  border-radius: 4px;
-  background: #7f1d1d;
+.meta-sep {
+  color: #3f3f46;
+  font-size: 0.7rem;
+}
+
+.header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.clock-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #71717a;
+}
+
+.clock-display {
+  font-family: "Consolas", "SF Mono", monospace;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.watchdog-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.watchdog-rate {
+  font-family: "Consolas", "SF Mono", monospace;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #38bdf8;
+  font-variant-numeric: tabular-nums;
+}
+
+.watchdog-sub {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #52525b;
+}
+
+.link-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid #7f1d1d;
+  background: #360808;
   color: #fca5a5;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
 }
 
-.status-pill.online {
-  background: #14532d;
+.link-badge.link-nominal {
+  border-color: #15803d;
+  background: #052e16;
   color: #86efac;
 }
 
-.gauge-grid {
+.link-badge.link-stale {
+  border-color: #ca8a04;
+  background: #362505;
+  color: #fde047;
+}
+
+.link-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.avionics-matrix {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  align-items: start;
   margin-bottom: 24px;
 }
 
-details {
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 6px;
-  padding: 12px;
+@media (max-width: 960px) {
+  .avionics-matrix {
+    grid-template-columns: 1fr;
+  }
 }
 
-summary {
+.gauges-cluster {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.telemetry-drawer {
+  background: #09090b;
+  border: 1px solid #27272a;
+  padding: 14px 18px;
+}
+
+.drawer-toggle {
+  display: flex;
+  justify-content: space-between;
   cursor: pointer;
   font-size: 0.75rem;
-  color: #94a3b8;
-  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #a1a1aa;
   user-select: none;
 }
 
-pre {
-  margin-top: 10px;
-  padding: 12px;
-  background: #020617;
-  border: 1px solid #1e293b;
-  border-radius: 4px;
-  color: #4ade80;
-  font-size: 0.75rem;
+.toggle-hint {
+  font-family: "Consolas", "SF Mono", monospace;
+  font-size: 0.7rem;
+  color: #52525b;
+}
+
+.stream-dump {
+  margin-top: 14px;
+  padding: 14px;
+  background: #000000;
+  border: 1px solid #18181b;
+  color: #a1a1aa;
+  font-family: "Consolas", "SF Mono", monospace;
+  font-size: 0.85rem;
   overflow-x: auto;
 }
 </style>

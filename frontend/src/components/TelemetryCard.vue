@@ -1,51 +1,129 @@
-<template>
-  <div class="card">
-    <span class="label">{{ label }}</span>
-    <div class="value-row">
-      <span class="value">{{ value }}</span>
-      <span class="unit">{{ unit }}</span>
+﻿<template>
+  <div class="telemetry-card" :class="{ 'card-alert': isAlert }">
+    <div class="card-meta-row">
+      <span class="card-channel">{{ channel }}</span>
+      <span class="card-status-dot"></span>
+    </div>
+
+    <div class="card-label">{{ label }}</div>
+
+    <div class="card-value-cluster">
+      <span class="card-value">{{ value }}</span>
+      <span class="card-unit">{{ unit }}</span>
+    </div>
+
+    <div class="card-footer-rail">
+      <div class="card-sublabel">{{ sublabel || 'NOMINAL' }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
 defineProps({
+  channel: { type: String, default: 'CH-00' },
   label: { type: String, required: true },
   value: { type: [String, Number], required: true },
-  unit: { type: String, default: '' }
+  unit: { type: String, default: '' },
+  sublabel: { type: String, default: '' },
+  isAlert: { type: Boolean, default: false }
 })
 </script>
 
 <style scoped>
-.card {
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 6px;
-  padding: 14px;
+.telemetry-card {
+  background: #09090b;
+  border: 1px solid #27272a;
+  border-top: 3px solid #52525b;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  min-height: 125px;
+  box-sizing: border-box;
+  position: relative;
 }
-.label {
-  font-size: 0.7rem;
-  color: #94a3b8;
+
+.telemetry-card.card-alert {
+  border-top-color: #ef4444;
+  background: #110505;
+}
+
+.card-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.card-channel {
+  font-family: "Consolas", "SF Mono", monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #71717a;
+}
+
+.card-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.card-alert .card-status-dot {
+  background: #ef4444;
+}
+
+.card-label {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #a1a1aa;
   text-transform: uppercase;
-  font-weight: 600;
+  margin-bottom: 10px;
 }
-.value-row {
+
+.card-value-cluster {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
 }
-.value {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #38bdf8;
+
+.card-value {
+  font-family: "Consolas", "SF Mono", "Roboto Mono", monospace;
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
 }
-.unit {
-  font-size: 0.75rem;
-  color: #64748b;
+
+.card-unit {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #71717a;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.card-footer-rail {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #18181b;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-sublabel {
+  font-family: "Consolas", "SF Mono", monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #52525b;
   text-transform: uppercase;
 }
 </style>
