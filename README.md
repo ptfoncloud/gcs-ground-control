@@ -7,6 +7,10 @@
 ![Tests](https://img.shields.io/badge/Tests-12%2F12%20Passing-success?style=flat)
 ![License](https://img.shields.io/badge/License-MIT-gray?style=flat)
 
+
+![Mission Console Live Flight Demo](assets/demo.gif)
+
+
 An asynchronous, hardware-agnostic Ground Control Station (GCS) and Hardware-in-the-Loop (HIL) telemetry testbed built from first principles. Ingests native binary MAVLink 2.0 telemetry streams over UDP, computes transport-layer frame loss via 8-bit unsigned modular arithmetic, and renders low-latency telemetry to a cockpit interface compliant with MIL-STD-1787C human-factors specifications.
 
 ---

@@ -19,7 +19,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy backend application source
 COPY app/ app/
-COPY scripts/ scripts/
 
 # Bind both the FastAPI HTTP/WebSocket port and the MAVLink UDP port
 EXPOSE 8080/tcp

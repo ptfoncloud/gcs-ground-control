@@ -32,7 +32,12 @@ class VehicleManager:
         self.running = False
 
     async def connect(self):
-        conn_str = getattr(settings, "MAVLINK_CONNECTION_STRING", "udpin:127.0.0.1:14550")
+        # Checks both possible config names, defaults to 0.0.0.0
+        conn_str = getattr(
+            settings,
+            "MAVLINK_CONNECTION",
+            getattr(settings, "MAVLINK_CONNECTION_STRING", "udpin:0.0.0.0:14550"),
+        )
         self.master = mavutil.mavlink_connection(conn_str)
         self.running = True
         print(f"[VEHICLE] Ingesting MAVLink on {conn_str}...")
@@ -88,7 +93,6 @@ class VehicleManager:
                         )
                         speed_ms = math.sqrt(msg.vx**2 + msg.vy**2) / 100.0
                         self.latest_telemetry.ground_speed = round(speed_ms, 2)
-                        # MAVLink stores lat/lon as integers multiplied by 1e7
                         self.latest_telemetry.lat = round(msg.lat / 1e7, 7)
                         self.latest_telemetry.lon = round(msg.lon / 1e7, 7)
 
