@@ -1,36 +1,65 @@
 import asyncio
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.websockets import WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
+from app.schemas import TelemetryFrame
 from app.vehicle import vehicle_manager
-from app.routers import commands, telemetry, ws
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Launch MAVLink background ingest loop
-    task = asyncio.create_task(vehicle_manager.connect())
-    yield
-    # Graceful shutdown
-    vehicle_manager.running = False
-    task.cancel()
+app = FastAPI(title="Aerospace Ground Control Station Core", version="1.0.0")
 
-app = FastAPI(title="GCS Mission Backend", lifespan=lifespan)
-
-# Allow Vue dev server to communicate
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mount Routers
-app.include_router(commands.router)
-app.include_router(telemetry.router)
-app.include_router(ws.router)
+class ArmRequest(BaseModel):
+    force: bool = False
 
-@app.get("/")
-def root():
-    return {"status": "ONLINE", "system": "GCS Mission Core"}
+class FlightModeRequest(BaseModel):
+    mode: str
+
+# 1. Health Probe
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
+# 2. REST Telemetry Snapshot
+@app.get("/telemetry", response_model=TelemetryFrame)
+@app.get("/api/telemetry", response_model=TelemetryFrame)
+def get_telemetry():
+    return vehicle_manager.latest_telemetry
+
+# 3. Command Uplink Endpoints
+@app.post("/command/arm")
+@app.post("/api/command/arm")
+def arm_vehicle(cmd: ArmRequest):
+    vehicle_manager.send_arm_command(arm=True, force=cmd.force)
+    return {"status": "DISPATCHED", "command": "ARM", "force": cmd.force}
+
+@app.post("/command/disarm")
+@app.post("/api/command/disarm")
+def disarm_vehicle(cmd: ArmRequest):
+    vehicle_manager.send_arm_command(arm=False, force=cmd.force)
+    return {"status": "DISPATCHED", "command": "DISARM", "force": cmd.force}
+
+@app.post("/command/mode")
+@app.post("/api/command/mode")
+def set_flight_mode(cmd: FlightModeRequest):
+    vehicle_manager.set_mode(cmd.mode)
+    return {"status": "DISPATCHED", "target_mode": cmd.mode}
+
+# 4. High-frequency WebSocket Downlink
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            await websocket.send_text(vehicle_manager.latest_telemetry.model_dump_json())
+            await asyncio.sleep(0.05)  # 20 Hz
+    except WebSocketDisconnect:
+        pass

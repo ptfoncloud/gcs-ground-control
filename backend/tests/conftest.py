@@ -30,7 +30,7 @@ def fresh_vehicle():
     return vm
 
 @pytest_asyncio.fixture
-async def async_client()
+async def async_client():
     "Asynchronous client for testing FastAPI command endpoints."
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
