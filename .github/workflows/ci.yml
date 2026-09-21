@@ -1,21 +1,22 @@
-name: Test Suite
+name: Backend CI
 
 on: [push, pull_request]
 
 jobs:
-  backend-tests:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
       - name: Install dependencies
         run: |
           cd backend
           pip install -r requirements.txt
-      - name: Run Pytest
+          pip install pytest pytest-asyncio httpx
+      - name: Run Test Suite
         run: |
           cd backend
-          pytest
+          python -m pytest tests/ -v
