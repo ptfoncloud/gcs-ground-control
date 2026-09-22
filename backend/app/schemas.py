@@ -1,7 +1,6 @@
+from typing import List, Literal, Optional
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
-from pydantic import BaseModel
+
 
 class TelemetryFrame(BaseModel):
     timestamp: float = 0.0
@@ -18,10 +17,6 @@ class TelemetryFrame(BaseModel):
     lat: float = 35.0594
     lon: float = -118.1517
 
-class VehicleCommand(BaseModel):
-    command: str  # ARM, DISARM, TAKEOFF, RTL, START_MISSION
-    param1: Optional[float] = 0.0
-    param2: Optional[float] = 0.0
 
 class HandFrame(BaseModel):
     palm_position: List[float]  # [x, y, z]
@@ -30,9 +25,12 @@ class HandFrame(BaseModel):
     pinch_strength: float
     extended_fingers: int
 
-from typing import Optional
-from pydantic import BaseModel
+
+# Keep in sync with ControlPanel.vue's `availableModes`.
+FlightMode = Literal["GUIDED", "AUTO", "RTL", "LOITER", "STABILIZE"]
+
 
 class CommandRequest(BaseModel):
-    command: str
-    mode: Optional[str] = None
+    command: Literal["ARM", "DISARM", "SET_MODE"]
+    mode: Optional[FlightMode] = None
+    force: bool = False

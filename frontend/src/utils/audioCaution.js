@@ -14,6 +14,7 @@ export function playBeep(freq = 800, duration = 0.08) {
   const osc = audio.createOscillator()
   const gain = audio.createGain()
 
+  osc.type = 'square'
   osc.frequency.value = freq
   osc.connect(gain)
   gain.connect(audio.destination)

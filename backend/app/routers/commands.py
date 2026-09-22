@@ -4,20 +4,26 @@ from app.vehicle import vehicle_manager
 
 router = APIRouter(prefix="/api/command", tags=["Commands"])
 
+
 @router.post("")
 async def execute_command(payload: CommandRequest):
-    cmd = payload.command.upper()
-    if cmd not in ["ARM", "DISARM", "SET_MODE"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported command '{payload.command}'"
+    """
+    The single canonical command-uplink endpoint. `command` and `mode`
+    (when SET_MODE is used) are validated by CommandRequest itself — an
+    unrecognized value never reaches the vehicle layer, it gets a 422
+    straight from FastAPI/Pydantic.
+    """
+    try:
+        success = await vehicle_manager.send_command(
+            payload.command, mode=payload.mode, force=payload.force
         )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    success = await vehicle_manager.send_command(cmd, mode=payload.mode)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to uplink command '{cmd}' to vehicle"
+            detail=f"Failed to uplink command '{payload.command}' to vehicle",
         )
 
-    return {"status": "ACK", "dispatched": cmd}
+    return {"status": "ACK", "dispatched": payload.command}

@@ -1,12 +1,14 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.websockets import WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
 from app.schemas import TelemetryFrame
 from app.vehicle import vehicle_manager
+from app.routers import commands, ws
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 
 
 @asynccontextmanager
@@ -33,13 +35,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class ArmRequest(BaseModel):
-    force: bool = False
-
-
-class FlightModeRequest(BaseModel):
-    mode: str
+# Command uplink (POST /api/command) and WebSocket downlink
+# (/ws/telemetry, /ws/gestures) both live in their router modules —
+# mounting them here is what actually makes those paths reachable.
+app.include_router(commands.router)
+app.include_router(ws.router)
 
 
 # 1. Health Probe
@@ -55,29 +55,7 @@ def get_telemetry():
     return vehicle_manager.latest_telemetry
 
 
-# 3. Command Uplink Endpoints
-@app.post("/command/arm")
-@app.post("/api/command/arm")
-def arm_vehicle(cmd: ArmRequest):
-    vehicle_manager.send_arm_command(arm=True, force=cmd.force)
-    return {"status": "DISPATCHED", "command": "ARM", "force": cmd.force}
-
-
-@app.post("/command/disarm")
-@app.post("/api/command/disarm")
-def disarm_vehicle(cmd: ArmRequest):
-    vehicle_manager.send_arm_command(arm=False, force=cmd.force)
-    return {"status": "DISPATCHED", "command": "DISARM", "force": cmd.force}
-
-
-@app.post("/command/mode")
-@app.post("/api/command/mode")
-def set_flight_mode(cmd: FlightModeRequest):
-    vehicle_manager.set_mode(cmd.mode)
-    return {"status": "DISPATCHED", "target_mode": cmd.mode}
-
-
-# 4. Blackbox Telemetry Recorder Endpoints
+# 3. Blackbox Telemetry Recorder Endpoints
 @app.post("/record/start")
 @app.post("/api/record/start")
 def start_recording():
@@ -119,17 +97,3 @@ def export_recording():
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-
-# 5. High-frequency WebSocket Downlink
-@app.websocket("/ws/telemetry")
-async def websocket_telemetry(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            await websocket.send_text(
-                vehicle_manager.latest_telemetry.model_dump_json()
-            )
-            await asyncio.sleep(0.05)  # 20 Hz
-    except WebSocketDisconnect:
-        pass

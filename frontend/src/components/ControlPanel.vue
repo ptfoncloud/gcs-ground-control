@@ -64,6 +64,7 @@
 <script setup>
 import { ref, onUnmounted } from 'vue'
 import { useVehicleStore } from '../stores/vehicleStore'
+import { API_BASE_URL } from '../config'
 
 const store = useVehicleStore()
 const availableModes = ['GUIDED', 'AUTO', 'RTL', 'LOITER', 'STABILIZE']
@@ -89,7 +90,7 @@ onUnmounted(() => {
 const sendCommand = async (payload) => {
   isTransmitting.value = true
   try {
-    const response = await fetch('http://localhost:8080/api/command', {
+    const response = await fetch(`${API_BASE_URL}/api/command`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -105,8 +106,11 @@ const sendCommand = async (payload) => {
 }
 
 const toggleArm = () => {
-  const targetCommand = store.telemetry.armed ? 'DISARM' : 'ARM'
-  sendCommand({ command: targetCommand })
+  const armed = store.telemetry.armed
+  const targetCommand = armed ? 'DISARM' : 'ARM'
+  // When armed, the button reads "FORCE DISARM" — it now actually sets
+  // force:true, matching what it says on the label.
+  sendCommand({ command: targetCommand, force: armed })
 }
 
 const setFlightMode = () => {

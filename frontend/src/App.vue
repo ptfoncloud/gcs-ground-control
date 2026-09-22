@@ -59,6 +59,7 @@
     <!-- MAIN COCKPIT WORKSPACE -->
     <main class="console-body">
       <ControlPanel />
+      <RecorderControls />
 
       <!-- UPPER DECK: PFD + MOVING MAP -->
       <div class="flight-deck-grid">
@@ -127,8 +128,10 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useVehicleStore } from './stores/vehicleStore'
 import { startAlarm, stopAlarm, toggleMute } from './utils/audioCaution'
+import { WS_BASE_URL } from './config'
 import TelemetryCard from './components/TelemetryCard.vue'
 import ControlPanel from './components/ControlPanel.vue'
+import RecorderControls from './components/RecorderControls.vue'
 import ArtificialHorizon from './components/ArtificialHorizon.vue'
 import TacticalMap from './components/TacticalMap.vue'
 
@@ -139,10 +142,15 @@ let ws = null
 const utcTimeStr = ref('00:00:00 UTC')
 let clockInterval = null
 
-// Packet tracking & link watchdog
+// Packet tracking & link watchdog.
+// packetRateHz is derived from the change in the backend's cumulative
+// packets_rx counter over a rolling 1s window — NOT from how often a
+// websocket frame arrives. The websocket only broadcasts at a fixed
+// 20Hz, so counting frame arrivals silently capped the displayed rate
+// at 20Hz even when the real MAVLink link ran faster.
 const packetRateHz = ref(0.0)
 const isLinkFresh = ref(false)
-let packetTimes = []
+let rxSamples = [] // { t: performance.now(), rx: packets_rx }
 let watchdogInterval = null
 let lastPacketsRx = -1
 let lastPacketTime = performance.now()
@@ -172,27 +180,17 @@ const formatHeading = (yawRad) => {
   return getHeadingDeg().toFixed(0)
 }
 
-onMounted(() => {
-  clockInterval = setInterval(() => {
-    const now = new Date()
-    utcTimeStr.value = now.toUTCString().split(' ')[4] + ' UTC'
-  }, 1000)
+let reconnectTimer = null
+let reconnectAttempt = 0
+let unmounting = false
+const MAX_RECONNECT_DELAY_MS = 8000
 
-  // Watchdog checks every 250ms for telemetry stall (>1.2s)
-  watchdogInterval = setInterval(() => {
-    const now = performance.now()
-    packetTimes = packetTimes.filter(t => now - t <= 1000)
-    packetRateHz.value = packetTimes.length
-
-    if (now - lastPacketTime > 1200) {
-      isLinkFresh.value = false
-    }
-  }, 250)
-
-  ws = new WebSocket('ws://localhost:8080/ws/telemetry')
+const connectWebSocket = () => {
+  ws = new WebSocket(`${WS_BASE_URL}/ws/telemetry`)
 
   ws.onopen = () => {
     store.connected = true
+    reconnectAttempt = 0
   }
 
   ws.onmessage = (event) => {
@@ -200,12 +198,16 @@ onMounted(() => {
       const data = JSON.parse(event.data)
       store.updateTelemetry(data)
 
-      // Confirm packets_rx increments before counting frame as fresh
-      if (data.packets_rx && data.packets_rx > lastPacketsRx) {
+      // packets_rx can legitimately be 0 right after a backend restart,
+      // so compare against lastPacketsRx rather than treating 0 as falsy.
+      if (typeof data.packets_rx === 'number') {
+        const now = performance.now()
+        if (data.packets_rx > lastPacketsRx) {
+          lastPacketTime = now
+          isLinkFresh.value = true
+        }
         lastPacketsRx = data.packets_rx
-        lastPacketTime = performance.now()
-        packetTimes.push(performance.now())
-        isLinkFresh.value = true
+        rxSamples.push({ t: now, rx: data.packets_rx })
       }
     } catch (err) {
       console.error('Failed to parse telemetry packet:', err)
@@ -215,10 +217,51 @@ onMounted(() => {
   ws.onclose = () => {
     store.connected = false
     isLinkFresh.value = false
+    if (unmounting) return
+
+    // Reconnect with capped exponential backoff instead of leaving the
+    // console permanently disconnected after any link drop.
+    const delay = Math.min(1000 * 2 ** reconnectAttempt, MAX_RECONNECT_DELAY_MS)
+    reconnectAttempt += 1
+    reconnectTimer = setTimeout(connectWebSocket, delay)
   }
+
+  ws.onerror = () => {
+    ws.close()
+  }
+}
+
+onMounted(() => {
+  clockInterval = setInterval(() => {
+    const now = new Date()
+    utcTimeStr.value = now.toUTCString().split(' ')[4] + ' UTC'
+  }, 1000)
+
+  // Watchdog checks every 250ms for telemetry stall (>1.2s)
+  watchdogInterval = setInterval(() => {
+    const now = performance.now()
+    rxSamples = rxSamples.filter(s => now - s.t <= 1000)
+
+    if (rxSamples.length >= 2) {
+      const oldest = rxSamples[0]
+      const newest = rxSamples[rxSamples.length - 1]
+      const elapsedSec = (newest.t - oldest.t) / 1000
+      packetRateHz.value = elapsedSec > 0 ? (newest.rx - oldest.rx) / elapsedSec : 0
+    } else {
+      packetRateHz.value = 0
+    }
+
+    if (now - lastPacketTime > 1200) {
+      isLinkFresh.value = false
+    }
+  }, 250)
+
+  connectWebSocket()
 })
 
 onUnmounted(() => {
+  unmounting = true
+  if (reconnectTimer) clearTimeout(reconnectTimer)
   if (ws) ws.close()
   if (clockInterval) clearInterval(clockInterval)
   if (watchdogInterval) clearInterval(watchdogInterval)

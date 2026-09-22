@@ -1,12 +1,14 @@
 import asyncio
 import csv
 import json
+import math
 import os
 import sys
 from datetime import datetime
 
-# URL of the running FastAPI telemetry websocket
-WS_URL = "ws://127.0.0.1:8080/ws/telemetry"
+# URL of the running FastAPI telemetry websocket. Override with
+# GCS_WS_URL if the backend isn't on this same machine.
+WS_URL = os.environ.get("GCS_WS_URL", "ws://127.0.0.1:8080/ws/telemetry")
 LOGS_DIR = "flight_logs"
 
 CSV_HEADERS = [
@@ -54,6 +56,10 @@ async def record():
                     raw_msg = await ws.recv()
                     data = json.loads(raw_msg)
 
+                    # The websocket payload's pitch/roll/yaw are radians,
+                    # straight off the MAVLink ATTITUDE message — convert
+                    # here so the pitch_deg/roll_deg/yaw_deg headers above
+                    # are actually true.
                     writer.writerow([
                         data.get("timestamp", 0.0),
                         1 if data.get("armed") else 0,
@@ -61,9 +67,9 @@ async def record():
                         data.get("altitude", 0.0),
                         data.get("ground_speed", 0.0),
                         data.get("battery_voltage", 0.0),
-                        data.get("pitch", 0.0),
-                        data.get("roll", 0.0),
-                        data.get("yaw", 0.0),
+                        math.degrees(data.get("pitch", 0.0)),
+                        math.degrees(data.get("roll", 0.0)),
+                        math.degrees(data.get("yaw", 0.0)),
                         data.get("lat", 0.0),
                         data.get("lon", 0.0),
                         data.get("packets_rx", 0),

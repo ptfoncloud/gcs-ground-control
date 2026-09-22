@@ -29,11 +29,13 @@ altitude_m = 0.0
 ground_speed_ms = 0.0
 
 start_time = time.time()
+loop_tick = 0  # increments once per 50ms loop iteration (20Hz)
 
 try:
     while True: 
         now = time.time()
         t = now - start_time
+        loop_tick += 1
 
         # --- DRAIN INCOMING UDP COMMAND BUFFER NON-BLOCKINGLY ---
         while True:
@@ -91,16 +93,19 @@ try:
         if is_armed:
             base_mode |= mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
 
-        mav.mav.heartbeat_send(
-            mavutil.mavlink.MAV_TYPE_QUADROTOR,
-            mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA,
-            base_mode,
-            custom_mode,
-            # GUIDED MODE
-            mavutil.mavlink.MAV_STATE_ACTIVE if is_armed else mavutil.mavlink.MAV_STATE_STANDBY
-        )
+        # HEARTBEAT 1hz (matches real ArduPilot behavior — it was
+        # previously firing at the full 20hz loop rate)
+        if loop_tick % 20 == 0:
+            mav.mav.heartbeat_send(
+                mavutil.mavlink.MAV_TYPE_QUADROTOR,
+                mavutil.mavlink.MAV_AUTOPILOT_ARDUPILOTMEGA,
+                base_mode,
+                custom_mode,
+                # GUIDED MODE
+                mavutil.mavlink.MAV_STATE_ACTIVE if is_armed else mavutil.mavlink.MAV_STATE_STANDBY
+            )
 
-        # ATTITUDE 20hz
+        # ATTITUDE 20hz — every loop tick
         mav.mav.attitude_send(
             int(t * 1000),
             sim_roll_rad,
@@ -109,25 +114,27 @@ try:
             0.0, 0.0, 0.0
         )
 
-        # Global Postion INT (10hz)
-        mav.mav.global_position_int_send(
-            int(t * 1000),
-            339200000, # random lat
-            -1184000000, # random lon
-            sim_altitude_mm,
-            sim_altitude_mm,
-            sim_groundspeed_cms, 0, 0,
-            int(math.degrees(sim_yaw_rad) * 100)
-        )
+        # Global Position INT 10hz — every other tick
+        if loop_tick % 2 == 0:
+            mav.mav.global_position_int_send(
+                int(t * 1000),
+                339200000, # random lat
+                -1184000000, # random lon
+                sim_altitude_mm,
+                sim_altitude_mm,
+                sim_groundspeed_cms, 0, 0,
+                int(math.degrees(sim_yaw_rad) * 100)
+            )
 
-        # SYS_STATUS (2hz) - general status stuff
-        mav.mav.sys_status_send(
-            0,0,0,0,
-            sim_battery_mv,
-            -1,      # battery current unknown
-            95,      # 95% remaining 
-            0 , 0 , 0 , 0 , 0 , 0
-        )
+        # SYS_STATUS 2hz — every 10th tick
+        if loop_tick % 10 == 0:
+            mav.mav.sys_status_send(
+                0,0,0,0,
+                sim_battery_mv,
+                -1,      # battery current unknown
+                95,      # 95% remaining
+                0 , 0 , 0 , 0 , 0 , 0
+            )
 
         time.sleep(0.05) # 20hz loop rate
 

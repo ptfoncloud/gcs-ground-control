@@ -4,7 +4,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat&logo=fastapi&logoColor=white)
 ![Vue.js](https://img.shields.io/badge/Vue.js-3.x-4FC08D?style=flat&logo=vuedotjs&logoColor=white)
 ![MAVLink](https://img.shields.io/badge/MAVLink-2.0-blue?style=flat)
-![Tests](https://img.shields.io/badge/Tests-12%2F12%20Passing-success?style=flat)
+![Tests](https://img.shields.io/badge/Tests-15%2F15%20Passing-success?style=flat)
 ![License](https://img.shields.io/badge/License-MIT-gray?style=flat)
 
 
@@ -113,33 +113,45 @@ Content-Type: application/json
 .
 ├── backend/
 │   ├── app/
-│   │   ├── config.py             # System & connection configuration
-│   │   ├── main.py               # FastAPI routes, REST endpoints & WebSocket broadcaster
-│   │   ├── schemas.py            # Pydantic telemetry models
-│   │   └── vehicle.py            # UDP MAVLink ingestion loop & state tracking
-│   ├── scripts/
-│   │   └── mock_mavlink.py       # Kinematic flight sim & telemetry generator
+│   │   ├── config.py              # Env-driven runtime settings (pydantic-settings)
+│   │   ├── main.py                # FastAPI app, health/telemetry/record REST + router mounts
+│   │   ├── schemas.py             # Pydantic telemetry & command models
+│   │   ├── vehicle.py             # UDP MAVLink ingestion loop & state tracking
+│   │   ├── gestures.py            # Gesture classifier (stub — not implemented yet)
+│   │   └── routers/
+│   │       ├── commands.py        # POST /api/command — canonical command uplink
+│   │       └── ws.py              # /ws/telemetry and /ws/gestures WebSocket endpoints
 │   └── tests/
-│       ├── conftest.py           # Pytest fixtures & async HTTP test client
-│       ├── test_api.py           # API health check verification
+│       ├── conftest.py            # Pytest fixtures & async HTTP test client
+│       ├── test_api.py            # API health check verification
 │       ├── test_command_interlocks.py  # Safety state machine tests
 │       └── test_mavlink_integrity.py   # Modulo-256 math & packet drop tests
+├── scripts/
+│   ├── mock_mavlink.py            # Kinematic flight sim & telemetry generator (repo root, not backend/)
+│   └── record_telemetry.py        # Standalone CLI blackbox recorder (CSV, via the WS feed)
 └── frontend/
     ├── src/
     │   ├── components/
     │   │   ├── ArtificialHorizon.vue # MIL-STD-1787C Primary Flight Display
     │   │   ├── ControlPanel.vue      # Command uplink buttons & safety interlocks
+    │   │   ├── RecorderControls.vue  # Blackbox recorder start/stop/export
     │   │   ├── TacticalMap.vue       # Leaflet moving map with CartoDB dark tiles
     │   │   └── TelemetryCard.vue     # High-contrast instrumentation readouts
     │   ├── stores/
     │   │   └── vehicleStore.js       # Pinia reactive telemetry state
     │   ├── utils/
     │   │   └── audioCaution.js       # Native Web Audio API dual-tone synthesizer
+    │   ├── config.js                  # Backend URL resolution (see below)
     │   ├── App.vue                   # Dual-deck cockpit interface
     │   └── main.js
     └── package.json
 
 ```
+
+The backend no longer ships a database layer — an unwired SQLAlchemy/SQLite
+subsystem (`database.py`, `models.py`, a `/telemetry/history` route) used to
+exist here, but nothing ever wrote to it. Flight history is captured by the
+blackbox recorder (`/api/record/*`, exported as CSV) instead.
 
 ---
 
@@ -148,14 +160,27 @@ Content-Type: application/json
 ### Automated Launch (Recommended)
 Clone the repository and run the PowerShell orchestrator:
 
-```powershell
-.\launch.ps1
-```
+```text
+============================= test session starts ==============================
+platform win32 -- Python 3.11.9, pytest-9.1.1, pluggy-1.6.0
+plugins: anyio-4.15.1, asyncio-1.4.0
 
-The script verifies dependencies and launches each process in its own window:
-* **Mission Backend:** `http://localhost:8080`
-* **Mission Console HUD:** `http://localhost:5173`
-* **Mock SITL Feeder:** UDP broadcast to `127.0.0.1:14550`
+tests/test_api.py::test_health PASSED                                     [  8%]
+tests/test_command_interlocks.py::TestCommandInterlocks::test_arm_command_dispatch_does_not_optimistically_arm PASSED [ 16%]
+tests/test_command_interlocks.py::TestCommandInterlocks::test_emergency_motor_cutoff_validates_payload PASSED [ 25%]
+tests/test_command_interlocks.py::TestCommandInterlocks::test_telemetry_schema_snapshot PASSED                 [ 33%]
+tests/test_command_interlocks.py::TestCommandInterlocks::test_authoritative_heartbeat_state_transition PASSED [ 41%]
+tests/test_mavlink_integrity.py::TestMavlinkSequenceMath::test_nominal_continuous_stream PASSED                [ 50%]
+tests/test_mavlink_integrity.py::TestMavlinkSequenceMath::test_single_packet_drop PASSED                      [ 58%]
+tests/test_mavlink_integrity.py::TestMavlinkSequenceMath::test_multi_packet_burst_loss PASSED                  [ 66%]
+tests/test_mavlink_integrity.py::TestMavlinkSequenceMath::test_uint8_rollover_nominal PASSED                  [ 75%]
+tests/test_mavlink_integrity.py::TestMavlinkSequenceMath::test_uint8_rollover_with_loss PASSED                 [ 83%]
+tests/test_mavlink_integrity.py::TestMavlinkSequenceMath::test_duplicate_frame_rejection PASSED               [ 91%]
+tests/test_mavlink_integrity.py::TestVehicleManagerPacketIntegration::test_vehicle_manager_ingestion_updates_loss PASSED [100%]
+
+============================== 12 passed in 0.06s ==============================
+
+```
 
 ---
 
@@ -186,15 +211,21 @@ npm run dev
 
 ```
 
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:5173` in your browser. The console talks to the
+backend at `http://<the-host-you-opened-this-page-from>:8080` by
+default (see `frontend/src/config.js`) — so this also works unmodified
+when you open it from another machine on the same network as the
+backend (e.g. a laptop connecting to a companion computer on a real
+vehicle). Set `VITE_API_BASE_URL` at build time (see `.env.example`)
+only if the backend lives somewhere else entirely.
 
 ### Step 3: Flight Telemetry Simulator (HIL Stream)
 
-In a separate terminal, launch the mock kinematics script:
+`mock_mavlink.py` lives at the **repository root**, not under `backend/`.
+In a separate terminal, with the backend virtual environment active:
 
 ```bash
-cd backend
-# With virtual environment active:
+# From the repository root:
 python scripts/mock_mavlink.py
 
 ```
