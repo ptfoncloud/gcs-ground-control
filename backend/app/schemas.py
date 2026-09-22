@@ -4,19 +4,19 @@ from datetime import datetime
 from pydantic import BaseModel
 
 class TelemetryFrame(BaseModel):
-    timestamp: float
-    armed: bool
-    flight_mode: str
-    altitude: float
-    ground_speed: float
-    battery_voltage: float
-    pitch: float
-    roll: float
-    yaw: float
+    timestamp: float = 0.0
+    armed: bool = False
+    flight_mode: str = "MANUAL"
+    altitude: float = 0.0
+    ground_speed: float = 0.0
+    battery_voltage: float = 12.6
+    pitch: float = 0.0
+    roll: float = 0.0
+    yaw: float = 0.0
     packets_rx: int = 0
     packet_loss_pct: float = 0.0
-    lat: float = 0.0
-    lon: float = 0.0
+    lat: float = 35.0594
+    lon: float = -118.1517
 
 class VehicleCommand(BaseModel):
     command: str  # ARM, DISARM, TAKEOFF, RTL, START_MISSION

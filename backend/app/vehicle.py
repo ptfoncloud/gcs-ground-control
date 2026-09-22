@@ -32,7 +32,12 @@ class VehicleManager:
         self.running = False
 
     async def connect(self):
-        conn_str = getattr(settings, "MAVLINK_CONNECTION_STRING", "udpin:127.0.0.1:14550")
+        # Checks both possible config names, defaults to 0.0.0.0
+        conn_str = getattr(
+            settings,
+            "MAVLINK_CONNECTION",
+            getattr(settings, "MAVLINK_CONNECTION_STRING", "udpin:0.0.0.0:14550"),
+        )
         self.master = mavutil.mavlink_connection(conn_str)
         self.running = True
         print(f"[VEHICLE] Ingesting MAVLink on {conn_str}...")
@@ -58,7 +63,9 @@ class VehicleManager:
                         self.packet_loss_pct = round(
                             (self.packets_lost / total_expected) * 100.0, 2
                         )
-
+                    # Blackbox Flight Recorder
+                    self.is_recording = False
+                    self.recorded_frames = []
                     # Update link stats on telemetry frame
                     self.latest_telemetry.packets_rx = self.packets_rx
                     self.latest_telemetry.packet_loss_pct = self.packet_loss_pct
@@ -88,7 +95,6 @@ class VehicleManager:
                         )
                         speed_ms = math.sqrt(msg.vx**2 + msg.vy**2) / 100.0
                         self.latest_telemetry.ground_speed = round(speed_ms, 2)
-                        # MAVLink stores lat/lon as integers multiplied by 1e7
                         self.latest_telemetry.lat = round(msg.lat / 1e7, 7)
                         self.latest_telemetry.lon = round(msg.lon / 1e7, 7)
 
@@ -98,6 +104,8 @@ class VehicleManager:
                         )
 
                     self.latest_telemetry.timestamp = round(time.time(), 2)
+                    if self.is_recording:
+                        self.recorded_frames.append(self.latest_telemetry.model_dump())
 
             except Exception as e:
                 print(f"[VEHICLE INGEST ERROR] {e}")
@@ -172,6 +180,29 @@ class VehicleManager:
         elif command == "SET_MODE":
             return self.set_mode(kwargs.get("mode", "GUIDED"))
         return False
+
+    def start_recording(self):
+        self.recorded_frames.clear()
+        self.is_recording = True
+        print("[RECORDER] Blackbox recording started.")
+
+    def stop_recording(self):
+        self.is_recording = False
+        print(f"[RECORDER] Blackbox recording stopped. Total frames: {len(self.recorded_frames)}")
+
+    def get_csv_export(self) -> str:
+        import io
+        import csv
+
+        if not self.recorded_frames:
+            return ""
+
+        output = io.StringIO()
+        fieldnames = list(self.recorded_frames[0].keys())
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(self.recorded_frames)
+        return output.getvalue()
 
 
 vehicle_manager = VehicleManager()

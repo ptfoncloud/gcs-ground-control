@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gcs_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080/tcp"      # REST endpoints & WebSocket downlink
+      - "14550:14550/udp"    # Wire MAVLink 2.0 ingestion
+    environment:
+      - MAVLINK_CONNECTION_STRING=udpin:0.0.0.0:14550
+    networks:
+      - gcs_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gcs_console
+    restart: unless-stopped
+    ports:
+      - "5173:80"            # Exposed on port 5173 for local browser consistency
+    depends_on:
+      - backend
+    networks:
+      - gcs_network
+
+networks:
+  gcs_network:
+    driver: bridge
