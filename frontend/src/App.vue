@@ -60,6 +60,7 @@
     <main class="console-body">
       <ControlPanel />
       <RecorderControls />
+      <GestureControl />
 
       <!-- UPPER DECK: PFD + MOVING MAP -->
       <div class="flight-deck-grid">
@@ -134,6 +135,7 @@ import ControlPanel from './components/ControlPanel.vue'
 import RecorderControls from './components/RecorderControls.vue'
 import ArtificialHorizon from './components/ArtificialHorizon.vue'
 import TacticalMap from './components/TacticalMap.vue'
+import GestureControl from './components/GestureControl.vue'
 
 const store = useVehicleStore()
 let ws = null

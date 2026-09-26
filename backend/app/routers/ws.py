@@ -24,9 +24,10 @@ async def gesture_stream(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             frame = HandFrame(**json.loads(data))
-            cmd = classifier.process_frame(frame)
-            if cmd:
-                await vehicle_manager.send_command(cmd)
-                await websocket.send_json({"event": "command_triggered", "command": cmd})
+            result = classifier.process_frame(frame)
+            if result:
+                cmd, kwargs = result
+                await vehicle_manager.send_command(cmd, **kwargs)
+                await websocket.send_json({"event": "command_triggered", "command": cmd, **kwargs})
     except WebSocketDisconnect:
         pass

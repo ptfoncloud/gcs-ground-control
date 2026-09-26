@@ -8,7 +8,7 @@ from app.schemas import TelemetryFrame
 
 logger = logging.getLogger(__name__)
 
-# Modes we actually offer in the console (ControlPanel.vue's <select>) and
+# Modes offered in the console (ControlPanel.vue's <select>) and
 # will accept over the API. Anything else is rejected rather than silently
 # dispatched as mode 0.
 FALLBACK_MODE_IDS = {
@@ -86,7 +86,7 @@ class VehicleManager:
 
         A packet is only treated as forward progress (and only then does
         `last_seq` advance) when its delta from the last-seen sequence is
-        in [0, 50). Anything else — an exact duplicate, or a stale/
+        in [0, 50). Anything else; an exact duplicate, or a stale/
         reordered packet arriving behind our current baseline — is
         ignored for loss-counting purposes AND deliberately does not
         rewind `last_seq`, so a late/reordered packet can't corrupt the

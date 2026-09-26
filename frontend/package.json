@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "leaflet": "^1.9.4",
+    "leapjs": "^0.6.4",
     "pinia": "^2.1.7",
     "vue": "^3.4.21"
   },
