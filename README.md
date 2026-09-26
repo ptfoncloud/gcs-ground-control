@@ -254,6 +254,3 @@ python scripts/mock_mavlink.py
 - [x] Real-time WebSocket telemetry distribution
 - [x] Interlocked propulsion state & flight mode uplinks
 - [x] Windows Winsock socket hardening (`10022` / `10054`)
-- [ ] **Attitude Director Indicator (ADI):** SVG-based artificial horizon with pitch ladders and roll arcs.
-- [ ] **Telemetry Watchdog:** Sequence tracking and visual alerts if packet frequency drops below 5 Hz.
-- [ ] **Waypoint Upload:** Support waypoint mission planning using the MAVLink `MISSION_ITEM_INT` protocol sequence.
